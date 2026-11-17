@@ -1,0 +1,16 @@
+
+Project: villa
+Source:  villa.dxf  (synthetic example from the prototype repository)
+Floors:  7
+Elements: 25  (from 69 CAD entities)
+Rooms:   0
+Parse time: 0.07s
+
+Element types:
+  door: 8
+  roof: 1
+  slab: 1
+  stair: 1
+  wall_exterior: 1
+  wall_interior: 1
+  window: 12
