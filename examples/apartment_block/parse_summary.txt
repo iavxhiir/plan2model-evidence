@@ -1,0 +1,16 @@
+
+Project: apartment_block
+Source:  apartment_block.dxf  (synthetic example from the prototype repository)
+Floors:  10
+Elements: 65  (from 163 CAD entities)
+Rooms:   0
+Parse time: 0.08s
+
+Element types:
+  door: 12
+  slab: 1
+  stair: 1
+  unknown: 1
+  wall_exterior: 1
+  wall_interior: 1
+  window: 48
