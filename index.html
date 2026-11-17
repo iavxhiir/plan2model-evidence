@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PLAN2MODEL - evidence of the prototype</title>
+<style>
+ body { font-family: -apple-system, 'Segoe UI', Roboto, sans-serif; margin: 0; color: #1c2430; background: #f6f8fb; line-height: 1.55; }
+ .wrap { max-width: 980px; margin: 0 auto; padding: 2rem 1.2rem 3rem; }
+ h1 { font-size: 1.7rem; margin: 0 0 .2rem; }
+ .sub { color: #5a6675; margin-bottom: 1.6rem; }
+ h2 { font-size: 1.15rem; margin: 2rem 0 .6rem; }
+ p, li { font-size: .95rem; }
+ table { border-collapse: collapse; width: 100%; background: #fff; font-size: .9rem; }
+ th, td { border: 1px solid #d9e0e9; padding: .5rem .6rem; text-align: left; vertical-align: top; }
+ th { background: #eef2f8; }
+ a { color: #175fa8; }
+ .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1rem; margin-top: .8rem; }
+ .card { background: #fff; border: 1px solid #d9e0e9; border-radius: 10px; padding: 1rem; }
+ .card img { width: 100%; border-radius: 6px; }
+ .note { background: #fff8e6; border: 1px solid #e8d9a0; border-radius: 8px; padding: .8rem 1rem; font-size: .9rem; }
+ footer { margin-top: 2.5rem; color: #5a6675; font-size: .8rem; }
+</style>
+</head>
+<body><div class="wrap">
+<h1>PLAN2MODEL &mdash; evidence of the prototype</h1>
+<div class="sub">2D CAD drawings (DXF/DWG) &rarr; navigable 3D building model in the browser, glTF/OBJ files and a quantities table.<br>
+Public evidence page for an EIT Culture &amp; Creativity funding application (acronym PLAN2MODEL), built 17 November 2026.</div>
+
+<p>Everything on this page was produced by the prototype exactly as it exists in the
+repository: 269 automated tests pass; the four examples below were regenerated for this page The four example buildings shown here are <b>synthetic
+drawings created with the prototype's own example tooling</b> &mdash; they contain no
+client data. Open a viewer page: it runs entirely in your browser (the 3D library loads
+from a CDN, so the page needs an internet connection), with floor switching, layer
+toggles, view modes and downloads of the GLB model and the quantities CSV.</p>
+
+<h2>What the prototype does today</h2>
+<ul>
+<li>Reads DXF drawings (DWG via the free ODA converter) and classifies elements by their
+<b>layer names</b> against AIA, ISO 13567, BS 1192 and national conventions, with a
+fuzzy-match fallback (the repository's layer_mappings.yaml covers English, German, French, Spanish, Italian, Japanese, Portuguese, Arabic and Chinese patterns).</li>
+<li>Detects floors and rooms, builds walls, slabs, doors, windows, columns, stairs and
+roofs as 3D geometry, and writes a self-contained viewer page, glTF/GLB/OBJ files and a
+quantities CSV.</li>
+<li>Passes 269 automated tests (run 17 November 2026). Conversions of the examples below take
+seconds on an ordinary laptop.</li>
+</ul>
+
+<h2>Known limits (stated honestly)</h2>
+<ul>
+<li>Results depend on drawing-layer discipline; on real project drawings a share of
+elements stays unclassified and is shown as &ldquo;unknown&rdquo; in the statistics.</li>
+<li>Doors and windows are drawn as separate boxes rather than cut into the walls.</li>
+<li>The quantities file lists element counts and room areas; wall lengths and volumes
+are on the development plan.</li>
+<li>No machine learning: classification is rule-based; learning from user corrections is
+a hypothesis to test, not a feature.</li>
+</ul>
+
+<h2>Examples</h2>
+<table>
+<tr><th>Drawing</th><th>Viewer</th><th>Floors</th><th>CAD entities</th><th>Building elements</th><th>Rooms</th><th>Parse</th><th>Export (GLB + CSV)</th></tr>
+<tr><td><b>simple_house</b><br><a href="examples/simple_house/source.dxf">source.dxf</a></td><td><a href="examples/simple_house/viewer.html">open 3D viewer</a> &middot; <a href="examples/simple_house/model.glb">GLB</a> &middot; <a href="examples/simple_house/quantities.csv">quantities CSV</a> &middot; <a href="examples/simple_house/parse_summary.txt">summary</a> &middot; <a href="examples/simple_house/screenshot.png">screenshot</a></td><td>3</td><td>23</td><td>11</td><td>0</td><td>0.1 s</td><td>4.6 s</td></tr>
+<tr><td><b>villa</b><br><a href="examples/villa/source.dxf">source.dxf</a></td><td><a href="examples/villa/viewer.html">open 3D viewer</a> &middot; <a href="examples/villa/model.glb">GLB</a> &middot; <a href="examples/villa/quantities.csv">quantities CSV</a> &middot; <a href="examples/villa/parse_summary.txt">summary</a> &middot; <a href="examples/villa/screenshot.png">screenshot</a></td><td>7</td><td>69</td><td>25</td><td>0</td><td>0.1 s</td><td>4.1 s</td></tr>
+<tr><td><b>apartment_block</b><br><a href="examples/apartment_block/source.dxf">source.dxf</a></td><td><a href="examples/apartment_block/viewer.html">open 3D viewer</a> &middot; <a href="examples/apartment_block/model.glb">GLB</a> &middot; <a href="examples/apartment_block/quantities.csv">quantities CSV</a> &middot; <a href="examples/apartment_block/parse_summary.txt">summary</a> &middot; <a href="examples/apartment_block/screenshot.png">screenshot</a></td><td>10</td><td>163</td><td>65</td><td>0</td><td>0.1 s</td><td>8.0 s</td></tr>
+<tr><td><b>commercial_building</b><br><a href="examples/commercial_building/source.dxf">source.dxf</a></td><td><a href="examples/commercial_building/viewer.html">open 3D viewer</a> &middot; <a href="examples/commercial_building/model.glb">GLB</a> &middot; <a href="examples/commercial_building/quantities.csv">quantities CSV</a> &middot; <a href="examples/commercial_building/parse_summary.txt">summary</a> &middot; <a href="examples/commercial_building/screenshot.png">screenshot</a></td><td>12</td><td>937</td><td>185</td><td>0</td><td>0.1 s</td><td>4.1 s</td></tr>
+</table>
+
+<div class="note">These four buildings are the prototype's synthetic example drawings.
+Real client drawings are not published, and real client drawings are not needed to check
+the pipeline: the viewer pages, GLB models and CSV files above were generated by the
+same code path used on real drawings.</div>
+
+<h2>Files per example</h2>
+<p>Each example folder contains <code>viewer.html</code> (the 3D page),
+<code>model.glb</code> (the generated model), <code>quantities.csv</code> (element
+counts and room areas), <code>parse_summary.txt</code> (what the parser recognised, by
+element type), <code>source.dxf</code> (the synthetic input drawing) and
+<code>screenshot.png</code> where available.</p>
+
+<h2>About</h2>
+<p>Prototype code name: Kaiken. The converter runs locally on the user's machine; this
+page only shows generated output. Applicant: Irdi Avxhi, software engineer (Albania).
+Contact: <a href="mailto:irdiavxhi@gmail.com">irdiavxhi@gmail.com</a> &middot;
+GitHub: <a href="https://github.com/iavxhiir">github.com/iavxhiir</a></p>
+
+<footer>Generated by PLAN2MODEL's evidence build (build_site.py). No tracking, no
+cookies; static files only.</footer>
+</div></body></html>
