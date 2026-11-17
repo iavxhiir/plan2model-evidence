@@ -1,0 +1,14 @@
+
+Project: simple_house
+Source:  simple_house.dxf  (synthetic example from the prototype repository)
+Floors:  3
+Elements: 11  (from 23 CAD entities)
+Rooms:   0
+Parse time: 0.08s
+
+Element types:
+  door: 4
+  slab: 1
+  wall_exterior: 1
+  wall_interior: 1
+  window: 4
