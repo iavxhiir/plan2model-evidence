@@ -1,0 +1,11 @@
+category,name,metric,value
+element,DOOR,count,8
+element,ROOF,count,1
+element,SLAB,count,1
+element,STAIR,count,1
+element,WALL_EXTERIOR,count,1
+element,WALL_INTERIOR,count,1
+element,WINDOW,count,12
+summary,elements,count,25
+summary,rooms,count,0
+summary,floors,count,7
