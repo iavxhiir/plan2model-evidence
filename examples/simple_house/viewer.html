@@ -1,0 +1,599 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>simple_house - 3D Construction Viewer</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #1a1a2e; color: #e0e0e0; overflow: hidden; }
+#canvas-container { width: 100vw; height: 100vh; position: relative; }
+canvas { display: block; }
+
+/* Sidebar */
+.sidebar {
+    position: fixed; top: 0; left: 0; width: 280px; height: 100vh;
+    background: rgba(16, 16, 32, 0.92); backdrop-filter: blur(10px);
+    border-right: 1px solid rgba(255,255,255,0.1);
+    z-index: 100; overflow-y: auto; padding: 1rem;
+    transition: transform 0.3s;
+}
+.sidebar.collapsed { transform: translateX(-280px); }
+.sidebar-toggle {
+    position: fixed; top: 1rem; left: 1rem; z-index: 200;
+    background: rgba(16,16,32,0.8); border: 1px solid rgba(255,255,255,0.2);
+    color: white; padding: 0.5rem 0.8rem; border-radius: 8px; cursor: pointer;
+    font-size: 1.2rem; transition: left 0.3s;
+}
+.sidebar-toggle.open { left: 290px; }
+
+.sidebar h1 { font-size: 1.3rem; margin-bottom: 0.5rem; color: #fff; }
+.sidebar .source { font-size: 0.75rem; color: #888; word-break: break-all; margin-bottom: 1rem; }
+.sidebar h3 { font-size: 0.85rem; text-transform: uppercase; color: #4a9eff; margin: 1rem 0 0.5rem; letter-spacing: 0.05em; }
+
+/* Stats */
+.stats-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0.5rem; margin-bottom: 1rem; }
+.stat-box { background: rgba(255,255,255,0.05); border-radius: 8px; padding: 0.6rem; text-align: center; }
+.stat-box .val { font-size: 1.4rem; font-weight: 700; color: #4a9eff; }
+.stat-box .lbl { font-size: 0.7rem; color: #888; }
+
+/* Floor buttons */
+.floor-buttons { display: flex; flex-wrap: wrap; gap: 0.3rem; margin-bottom: 0.5rem; }
+.floor-btn {
+    background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15);
+    color: #ccc; padding: 0.35rem 0.7rem; border-radius: 6px; cursor: pointer;
+    font-size: 0.8rem; transition: all 0.2s;
+}
+.floor-btn:hover { background: rgba(74,158,255,0.2); }
+.floor-btn.active { background: #4a9eff; color: white; border-color: #4a9eff; }
+
+/* Layer toggles */
+.layer-toggle { display: flex; align-items: center; gap: 0.5rem; padding: 0.3rem 0; cursor: pointer; font-size: 0.85rem; }
+.layer-toggle input { accent-color: #4a9eff; }
+
+/* Type stats */
+.type-stat { display: flex; align-items: center; gap: 0.4rem; font-size: 0.78rem; padding: 0.2rem 0; }
+.type-color { width: 12px; height: 12px; border-radius: 3px; flex-shrink: 0; }
+
+/* Export buttons */
+.export-actions { display: flex; flex-direction: column; gap: 0.35rem; }
+.export-btn {
+    background: rgba(74,158,255,0.15); border: 1px solid rgba(74,158,255,0.4);
+    color: #cfe4ff; padding: 0.45rem 0.7rem; border-radius: 6px; cursor: pointer;
+    font-size: 0.8rem; text-align: left; transition: all 0.2s;
+}
+.export-btn:hover { background: rgba(74,158,255,0.3); color: #fff; }
+
+/* Info panel */
+#info-panel {
+    position: fixed; bottom: 1rem; right: 1rem; z-index: 100;
+    background: rgba(16,16,32,0.9); border: 1px solid rgba(255,255,255,0.15);
+    border-radius: 10px; padding: 1rem; min-width: 220px;
+    display: none; backdrop-filter: blur(8px);
+}
+#info-panel h4 { color: #4a9eff; margin-bottom: 0.4rem; }
+#info-panel .info-row { font-size: 0.82rem; padding: 0.15rem 0; }
+#info-panel .info-label { color: #888; }
+
+/* View mode buttons */
+.view-modes { display: flex; gap: 0.3rem; margin-bottom: 0.5rem; flex-wrap: wrap; }
+.view-btn {
+    background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15);
+    color: #ccc; padding: 0.3rem 0.6rem; border-radius: 6px; cursor: pointer;
+    font-size: 0.78rem;
+}
+.view-btn:hover { background: rgba(74,158,255,0.2); }
+.view-btn.active { background: #4a9eff; color: white; }
+
+/* Loading */
+#loading {
+    position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+    background: #1a1a2e; display: flex; align-items: center; justify-content: center;
+    z-index: 9999; flex-direction: column; gap: 1rem;
+}
+#loading .spinner { width: 40px; height: 40px; border: 3px solid rgba(74,158,255,0.3); border-top-color: #4a9eff; border-radius: 50%; animation: spin 0.8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* Compass */
+#compass {
+    position: fixed; bottom: 1rem; left: 50%; transform: translateX(-50%);
+    background: rgba(16,16,32,0.7); padding: 0.3rem 1rem; border-radius: 20px;
+    font-size: 0.75rem; color: #888; z-index: 100;
+}
+</style>
+</head>
+<body>
+
+<div id="loading"><div class="spinner"></div><div>Building 3D scene...</div></div>
+
+<div id="canvas-container"></div>
+
+<button class="sidebar-toggle open" id="sidebarToggle" onclick="toggleSidebar()">&#9776;</button>
+
+<div class="sidebar" id="sidebar">
+    <h1>simple_house</h1>
+    <div class="source">synthetic example: simple_house.dxf</div>
+
+    <div class="stats-grid">
+        <div class="stat-box"><div class="val">11</div><div class="lbl">Elements</div></div>
+        <div class="stat-box"><div class="val">0</div><div class="lbl">Rooms</div></div>
+        <div class="stat-box"><div class="val">3</div><div class="lbl">Floors</div></div>
+    </div>
+
+    <h3>View Mode</h3>
+    <div class="view-modes">
+        <button class="view-btn active" onclick="setViewMode('3d', this)">3D Orbit</button>
+        <button class="view-btn" onclick="setViewMode('top', this)">Top View</button>
+        <button class="view-btn" onclick="setViewMode('front', this)">Front</button>
+        <button class="view-btn" onclick="setViewMode('side', this)">Side</button>
+        <button class="view-btn" onclick="setViewMode('xray', this)">X-Ray</button>
+    </div>
+
+    <h3>Floors</h3>
+    <div class="floor-buttons">
+        <button class="floor-btn active" onclick="showAllFloors(this)">All</button>
+<button class="floor-btn" onclick="showFloor(0, this)">Ground Floor</button>
+<button class="floor-btn" onclick="showFloor(1, this)">First Floor</button>
+<button class="floor-btn" onclick="showFloor(2, this)">Second Floor</button>
+
+    </div>
+
+    <h3>Layers</h3>
+    
+            <label class="layer-toggle">
+                <input type="checkbox" checked onchange="toggleLayerGroup(['WALL','WALL_INTERIOR','WALL_EXTERIOR','COLUMN','BEAM','SLAB','FLOOR_SLAB','ROOF_SLAB','FOUNDATION','FOOTING'], this.checked)">
+                <span>Structure (3)</span>
+            </label>
+            <label class="layer-toggle">
+                <input type="checkbox" checked onchange="toggleLayerGroup(['DOOR','WINDOW','CURTAIN_WALL'], this.checked)">
+                <span>Openings (8)</span>
+            </label>
+
+    <h3>Element Types</h3>
+    <div class="type-stat"><span class="type-color" style="background:#8B6914"></span>DOOR: 4</div><div class="type-stat"><span class="type-color" style="background:#e8e0d0"></span>SLAB: 1</div><div class="type-stat"><span class="type-color" style="background:#a0a0a0"></span>WALL_EXTERIOR: 1</div><div class="type-stat"><span class="type-color" style="background:#c8c8c8"></span>WALL_INTERIOR: 1</div><div class="type-stat"><span class="type-color" style="background:#87CEEB"></span>WINDOW: 4</div>
+
+    <h3>Export</h3>
+    <div class="export-actions">
+        <button class="export-btn" onclick="downloadGLB()">&#11015; Model .glb</button>
+        <button class="export-btn" onclick="downloadOBJ()">&#11015; Model .obj</button>
+        <button class="export-btn" onclick="downloadCSV()">&#11015; Quantities .csv</button>
+        <button class="export-btn" onclick="captureScreenshot()">&#128247; Screenshot .png</button>
+    </div>
+</div>
+
+<div id="info-panel">
+    <h4 id="info-title">Element</h4>
+    <div id="info-content"></div>
+</div>
+
+<div id="compass">
+    Scroll to zoom | Drag to orbit | Right-drag to pan
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script>
+// ================================================================
+// Data
+// ================================================================
+const ELEMENTS = [{"id": "6b0734f5ac0c", "type": "WALL_INTERIOR", "color": "#c8c8c8", "geometry": "mesh", "vertices": [[5.0, 0.0, 0.0], [5.0, 0.0, 8.0], [5.0, 3.0, 8.0], [5.0, 3.0, 0.0]], "faces": [[0, 1, 2, 3]], "floor": 0}, {"id": "a0d2413cb2af", "type": "DOOR", "color": "#8B6914", "geometry": "wall_segments", "segments": [{"cx": 2.5, "cy": 0.0, "length": 1.0, "angle": 0.0}], "base_z": 0.0, "height": 2.8, "thickness": 0.2, "floor": 0}, {"id": "984d21ea9457", "type": "DOOR", "color": "#8B6914", "geometry": "wall_segments", "segments": [{"cx": 2.5, "cy": 0.0, "length": 1.0, "angle": 0.0}], "base_z": 2.1, "height": 2.8, "thickness": 0.2, "floor": 2}, {"id": "9abef4a570e7", "type": "DOOR", "color": "#8B6914", "geometry": "wall_segments", "segments": [{"cx": 5.45, "cy": 3.0, "length": 0.9000000000000004, "angle": 0.0}], "base_z": 0.0, "height": 2.8, "thickness": 0.2, "floor": 0}, {"id": "a856cddb2dc0", "type": "DOOR", "color": "#8B6914", "geometry": "wall_segments", "segments": [{"cx": 5.45, "cy": 3.0, "length": 0.9000000000000004, "angle": 0.0}], "base_z": 2.1, "height": 2.8, "thickness": 0.2, "floor": 2}, {"id": "825b1b0682d1", "type": "WINDOW", "color": "#87CEEB", "geometry": "wall_segments", "segments": [{"cx": 7.75, "cy": 0.0, "length": 1.5, "angle": 0.0}], "base_z": 1.0, "height": 2.8, "thickness": 0.2, "floor": 1}, {"id": "705d43310503", "type": "WINDOW", "color": "#87CEEB", "geometry": "wall_segments", "segments": [{"cx": 7.75, "cy": 0.0, "length": 1.5, "angle": 0.0}], "base_z": 2.2, "height": 2.8, "thickness": 0.2, "floor": 2}, {"id": "171189a2c5e3", "type": "WINDOW", "color": "#87CEEB", "geometry": "wall_segments", "segments": [{"cx": 1.75, "cy": 8.0, "length": 1.5, "angle": 0.0}], "base_z": 1.0, "height": 2.8, "thickness": 0.2, "floor": 1}, {"id": "ea6fc1ca4c60", "type": "WINDOW", "color": "#87CEEB", "geometry": "wall_segments", "segments": [{"cx": 1.75, "cy": 8.0, "length": 1.5, "angle": 0.0}], "base_z": 2.2, "height": 2.8, "thickness": 0.2, "floor": 2}, {"id": "ae7efff59b47", "type": "WALL_EXTERIOR", "color": "#a0a0a0", "geometry": "mesh", "vertices": [[0.0, 0.0, 0.0], [10.0, 0.0, 0.0], [10.0, 3.0, 0.0], [0.0, 3.0, 0.0], [10.0, 0.0, 8.0], [10.0, 3.0, 8.0], [0.0, 0.0, 8.0], [0.0, 3.0, 8.0]], "faces": [[0, 1, 2, 3], [1, 4, 5, 2], [4, 6, 7, 5], [6, 0, 3, 7]], "floor": 0}, {"id": "f62deb679d67", "type": "SLAB", "color": "#e8e0d0", "geometry": "mesh", "vertices": [[0.0, 0.0, 0.0], [10.0, 0.0, 0.0], [10.0, 0.0, 8.0], [0.0, 0.0, 8.0], [0.0, 3.0, 0.0], [10.0, 3.0, 0.0], [10.0, 3.0, 8.0], [0.0, 3.0, 8.0]], "faces": [[0, 1, 2, 3], [4, 5, 6, 7]], "floor": 0}];
+const ROOMS = [];
+const FLOORS = [{"index": 0, "name": "Ground Floor", "elevation": 0.0, "height": 3.0}, {"index": 1, "name": "First Floor", "elevation": 1.0, "height": 3.0}, {"index": 2, "name": "Second Floor", "elevation": 2.1500000000000004, "height": 3.0}];
+const INFO = {"name": "simple_house", "source": "synthetic example: simple_house.dxf", "units": "m", "element_count": 11, "room_count": 0, "floor_count": 3, "type_counts": {"WALL_INTERIOR": 1, "DOOR": 4, "WINDOW": 4, "WALL_EXTERIOR": 1, "SLAB": 1}};
+const CENTER = { x: 5.0, y: 2.5, z: 4.0 };
+const SIZE = 10.0;
+
+// Embedded, fully-offline downloadable deliverables (Blender-free export).
+const MODEL_GLB_B64 = "Z2xURgIAAADoHwAAtBYAAEpTT057ImFzc2V0Ijp7InZlcnNpb24iOiIyLjAiLCJnZW5lcmF0b3IiOiJrYWlrZW4tbW9kZWwtZXhwb3J0In0sInNjZW5lIjowLCJzY2VuZXMiOlt7Im5vZGVzIjpbMCwxLDIsMyw0LDUsNiw3LDgsOSwxMF19XSwibm9kZXMiOlt7Im5hbWUiOiI2YjA3MzRmNWFjMGMiLCJtZXNoIjowfSx7Im5hbWUiOiJhMGQyNDEzY2IyYWYiLCJtZXNoIjoxfSx7Im5hbWUiOiI5ODRkMjFlYTk0NTciLCJtZXNoIjoyfSx7Im5hbWUiOiI5YWJlZjRhNTcwZTciLCJtZXNoIjozfSx7Im5hbWUiOiJhODU2Y2RkYjJkYzAiLCJtZXNoIjo0fSx7Im5hbWUiOiI4MjViMWIwNjgyZDEiLCJtZXNoIjo1fSx7Im5hbWUiOiI3MDVkNDMzMTA1MDMiLCJtZXNoIjo2fSx7Im5hbWUiOiIxNzExODlhMmM1ZTMiLCJtZXNoIjo3fSx7Im5hbWUiOiJlYTZmYzFjYTRjNjAiLCJtZXNoIjo4fSx7Im5hbWUiOiJhZTdlZmZmNTliNDciLCJtZXNoIjo5fSx7Im5hbWUiOiJmNjJkZWI2NzlkNjciLCJtZXNoIjoxMH1dLCJtZXNoZXMiOlt7Im5hbWUiOiJXQUxMX0lOVEVSSU9SIiwicHJpbWl0aXZlcyI6W3siYXR0cmlidXRlcyI6eyJQT1NJVElPTiI6MH0sImluZGljZXMiOjEsIm1hdGVyaWFsIjowLCJtb2RlIjo0fV19LHsibmFtZSI6IkRPT1IiLCJwcmltaXRpdmVzIjpbeyJhdHRyaWJ1dGVzIjp7IlBPU0lUSU9OIjoyfSwiaW5kaWNlcyI6MywibWF0ZXJpYWwiOjEsIm1vZGUiOjR9XX0seyJuYW1lIjoiRE9PUiIsInByaW1pdGl2ZXMiOlt7ImF0dHJpYnV0ZXMiOnsiUE9TSVRJT04iOjR9LCJpbmRpY2VzIjo1LCJtYXRlcmlhbCI6MSwibW9kZSI6NH1dfSx7Im5hbWUiOiJET09SIiwicHJpbWl0aXZlcyI6W3siYXR0cmlidXRlcyI6eyJQT1NJVElPTiI6Nn0sImluZGljZXMiOjcsIm1hdGVyaWFsIjoxLCJtb2RlIjo0fV19LHsibmFtZSI6IkRPT1IiLCJwcmltaXRpdmVzIjpbeyJhdHRyaWJ1dGVzIjp7IlBPU0lUSU9OIjo4fSwiaW5kaWNlcyI6OSwibWF0ZXJpYWwiOjEsIm1vZGUiOjR9XX0seyJuYW1lIjoiV0lORE9XIiwicHJpbWl0aXZlcyI6W3siYXR0cmlidXRlcyI6eyJQT1NJVElPTiI6MTB9LCJpbmRpY2VzIjoxMSwibWF0ZXJpYWwiOjIsIm1vZGUiOjR9XX0seyJuYW1lIjoiV0lORE9XIiwicHJpbWl0aXZlcyI6W3siYXR0cmlidXRlcyI6eyJQT1NJVElPTiI6MTJ9LCJpbmRpY2VzIjoxMywibWF0ZXJpYWwiOjIsIm1vZGUiOjR9XX0seyJuYW1lIjoiV0lORE9XIiwicHJpbWl0aXZlcyI6W3siYXR0cmlidXRlcyI6eyJQT1NJVElPTiI6MTR9LCJpbmRpY2VzIjoxNSwibWF0ZXJpYWwiOjIsIm1vZGUiOjR9XX0seyJuYW1lIjoiV0lORE9XIiwicHJpbWl0aXZlcyI6W3siYXR0cmlidXRlcyI6eyJQT1NJVElPTiI6MTZ9LCJpbmRpY2VzIjoxNywibWF0ZXJpYWwiOjIsIm1vZGUiOjR9XX0seyJuYW1lIjoiV0FMTF9FWFRFUklPUiIsInByaW1pdGl2ZXMiOlt7ImF0dHJpYnV0ZXMiOnsiUE9TSVRJT04iOjE4fSwiaW5kaWNlcyI6MTksIm1hdGVyaWFsIjozLCJtb2RlIjo0fV19LHsibmFtZSI6IlNMQUIiLCJwcmltaXRpdmVzIjpbeyJhdHRyaWJ1dGVzIjp7IlBPU0lUSU9OIjoyMH0sImluZGljZXMiOjIxLCJtYXRlcmlhbCI6NCwibW9kZSI6NH1dfV0sImFjY2Vzc29ycyI6W3siYnVmZmVyVmlldyI6MCwiY29tcG9uZW50VHlwZSI6NTEyNiwiY291bnQiOjQsInR5cGUiOiJWRUMzIiwibWluIjpbNS4wLDAuMCwwLjBdLCJtYXgiOls1LjAsMy4wLDguMF19LHsiYnVmZmVyVmlldyI6MSwiY29tcG9uZW50VHlwZSI6NTEyNSwiY291bnQiOjYsInR5cGUiOiJTQ0FMQVIifSx7ImJ1ZmZlclZpZXciOjIsImNvbXBvbmVudFR5cGUiOjUxMjYsImNvdW50Ijo4LCJ0eXBlIjoiVkVDMyIsIm1pbiI6WzIuMCwwLjAsLTAuMV0sIm1heCI6WzMuMCwyLjgsMC4xXX0seyJidWZmZXJWaWV3IjozLCJjb21wb25lbnRUeXBlIjo1MTI1LCJjb3VudCI6MzYsInR5cGUiOiJTQ0FMQVIifSx7ImJ1ZmZlclZpZXciOjQsImNvbXBvbmVudFR5cGUiOjUxMjYsImNvdW50Ijo4LCJ0eXBlIjoiVkVDMyIsIm1pbiI6WzIuMCwyLjEsLTAuMV0sIm1heCI6WzMuMCw0LjksMC4xXX0seyJidWZmZXJWaWV3Ijo1LCJjb21wb25lbnRUeXBlIjo1MTI1LCJjb3VudCI6MzYsInR5cGUiOiJTQ0FMQVIifSx7ImJ1ZmZlclZpZXciOjYsImNvbXBvbmVudFR5cGUiOjUxMjYsImNvdW50Ijo4LCJ0eXBlIjoiVkVDMyIsIm1pbiI6WzUuMCwwLjAsMi45XSwibWF4IjpbNS45LDIuOCwzLjFdfSx7ImJ1ZmZlclZpZXciOjcsImNvbXBvbmVudFR5cGUiOjUxMjUsImNvdW50IjozNiwidHlwZSI6IlNDQUxBUiJ9LHsiYnVmZmVyVmlldyI6OCwiY29tcG9uZW50VHlwZSI6NTEyNiwiY291bnQiOjgsInR5cGUiOiJWRUMzIiwibWluIjpbNS4wLDIuMSwyLjldLCJtYXgiOls1LjksNC45LDMuMV19LHsiYnVmZmVyVmlldyI6OSwiY29tcG9uZW50VHlwZSI6NTEyNSwiY291bnQiOjM2LCJ0eXBlIjoiU0NBTEFSIn0seyJidWZmZXJWaWV3IjoxMCwiY29tcG9uZW50VHlwZSI6NTEyNiwiY291bnQiOjgsInR5cGUiOiJWRUMzIiwibWluIjpbNy4wLDEuMCwtMC4xXSwibWF4IjpbOC41LDMuOCwwLjFdfSx7ImJ1ZmZlclZpZXciOjExLCJjb21wb25lbnRUeXBlIjo1MTI1LCJjb3VudCI6MzYsInR5cGUiOiJTQ0FMQVIifSx7ImJ1ZmZlclZpZXciOjEyLCJjb21wb25lbnRUeXBlIjo1MTI2LCJjb3VudCI6OCwidHlwZSI6IlZFQzMiLCJtaW4iOls3LjAsMi4yLC0wLjFdLCJtYXgiOls4LjUsNS4wLDAuMV19LHsiYnVmZmVyVmlldyI6MTMsImNvbXBvbmVudFR5cGUiOjUxMjUsImNvdW50IjozNiwidHlwZSI6IlNDQUxBUiJ9LHsiYnVmZmVyVmlldyI6MTQsImNvbXBvbmVudFR5cGUiOjUxMjYsImNvdW50Ijo4LCJ0eXBlIjoiVkVDMyIsIm1pbiI6WzEuMCwxLjAsNy45XSwibWF4IjpbMi41LDMuOCw4LjFdfSx7ImJ1ZmZlclZpZXciOjE1LCJjb21wb25lbnRUeXBlIjo1MTI1LCJjb3VudCI6MzYsInR5cGUiOiJTQ0FMQVIifSx7ImJ1ZmZlclZpZXciOjE2LCJjb21wb25lbnRUeXBlIjo1MTI2LCJjb3VudCI6OCwidHlwZSI6IlZFQzMiLCJtaW4iOlsxLjAsMi4yLDcuOV0sIm1heCI6WzIuNSw1LjAsOC4xXX0seyJidWZmZXJWaWV3IjoxNywiY29tcG9uZW50VHlwZSI6NTEyNSwiY291bnQiOjM2LCJ0eXBlIjoiU0NBTEFSIn0seyJidWZmZXJWaWV3IjoxOCwiY29tcG9uZW50VHlwZSI6NTEyNiwiY291bnQiOjgsInR5cGUiOiJWRUMzIiwibWluIjpbMC4wLDAuMCwwLjBdLCJtYXgiOlsxMC4wLDMuMCw4LjBdfSx7ImJ1ZmZlclZpZXciOjE5LCJjb21wb25lbnRUeXBlIjo1MTI1LCJjb3VudCI6MjQsInR5cGUiOiJTQ0FMQVIifSx7ImJ1ZmZlclZpZXciOjIwLCJjb21wb25lbnRUeXBlIjo1MTI2LCJjb3VudCI6OCwidHlwZSI6IlZFQzMiLCJtaW4iOlswLjAsMC4wLDAuMF0sIm1heCI6WzEwLjAsMy4wLDguMF19LHsiYnVmZmVyVmlldyI6MjEsImNvbXBvbmVudFR5cGUiOjUxMjUsImNvdW50IjoxMiwidHlwZSI6IlNDQUxBUiJ9XSwiYnVmZmVyVmlld3MiOlt7ImJ1ZmZlciI6MCwiYnl0ZU9mZnNldCI6MCwiYnl0ZUxlbmd0aCI6NDgsInRhcmdldCI6MzQ5NjJ9LHsiYnVmZmVyIjowLCJieXRlT2Zmc2V0Ijo0OCwiYnl0ZUxlbmd0aCI6MjQsInRhcmdldCI6MzQ5NjN9LHsiYnVmZmVyIjowLCJieXRlT2Zmc2V0Ijo3MiwiYnl0ZUxlbmd0aCI6OTYsInRhcmdldCI6MzQ5NjJ9LHsiYnVmZmVyIjowLCJieXRlT2Zmc2V0IjoxNjgsImJ5dGVMZW5ndGgiOjE0NCwidGFyZ2V0IjozNDk2M30seyJidWZmZXIiOjAsImJ5dGVPZmZzZXQiOjMxMiwiYnl0ZUxlbmd0aCI6OTYsInRhcmdldCI6MzQ5NjJ9LHsiYnVmZmVyIjowLCJieXRlT2Zmc2V0Ijo0MDgsImJ5dGVMZW5ndGgiOjE0NCwidGFyZ2V0IjozNDk2M30seyJidWZmZXIiOjAsImJ5dGVPZmZzZXQiOjU1MiwiYnl0ZUxlbmd0aCI6OTYsInRhcmdldCI6MzQ5NjJ9LHsiYnVmZmVyIjowLCJieXRlT2Zmc2V0Ijo2NDgsImJ5dGVMZW5ndGgiOjE0NCwidGFyZ2V0IjozNDk2M30seyJidWZmZXIiOjAsImJ5dGVPZmZzZXQiOjc5MiwiYnl0ZUxlbmd0aCI6OTYsInRhcmdldCI6MzQ5NjJ9LHsiYnVmZmVyIjowLCJieXRlT2Zmc2V0Ijo4ODgsImJ5dGVMZW5ndGgiOjE0NCwidGFyZ2V0IjozNDk2M30seyJidWZmZXIiOjAsImJ5dGVPZmZzZXQiOjEwMzIsImJ5dGVMZW5ndGgiOjk2LCJ0YXJnZXQiOjM0OTYyfSx7ImJ1ZmZlciI6MCwiYnl0ZU9mZnNldCI6MTEyOCwiYnl0ZUxlbmd0aCI6MTQ0LCJ0YXJnZXQiOjM0OTYzfSx7ImJ1ZmZlciI6MCwiYnl0ZU9mZnNldCI6MTI3MiwiYnl0ZUxlbmd0aCI6OTYsInRhcmdldCI6MzQ5NjJ9LHsiYnVmZmVyIjowLCJieXRlT2Zmc2V0IjoxMzY4LCJieXRlTGVuZ3RoIjoxNDQsInRhcmdldCI6MzQ5NjN9LHsiYnVmZmVyIjowLCJieXRlT2Zmc2V0IjoxNTEyLCJieXRlTGVuZ3RoIjo5NiwidGFyZ2V0IjozNDk2Mn0seyJidWZmZXIiOjAsImJ5dGVPZmZzZXQiOjE2MDgsImJ5dGVMZW5ndGgiOjE0NCwidGFyZ2V0IjozNDk2M30seyJidWZmZXIiOjAsImJ5dGVPZmZzZXQiOjE3NTIsImJ5dGVMZW5ndGgiOjk2LCJ0YXJnZXQiOjM0OTYyfSx7ImJ1ZmZlciI6MCwiYnl0ZU9mZnNldCI6MTg0OCwiYnl0ZUxlbmd0aCI6MTQ0LCJ0YXJnZXQiOjM0OTYzfSx7ImJ1ZmZlciI6MCwiYnl0ZU9mZnNldCI6MTk5MiwiYnl0ZUxlbmd0aCI6OTYsInRhcmdldCI6MzQ5NjJ9LHsiYnVmZmVyIjowLCJieXRlT2Zmc2V0IjoyMDg4LCJieXRlTGVuZ3RoIjo5NiwidGFyZ2V0IjozNDk2M30seyJidWZmZXIiOjAsImJ5dGVPZmZzZXQiOjIxODQsImJ5dGVMZW5ndGgiOjk2LCJ0YXJnZXQiOjM0OTYyfSx7ImJ1ZmZlciI6MCwiYnl0ZU9mZnNldCI6MjI4MCwiYnl0ZUxlbmd0aCI6NDgsInRhcmdldCI6MzQ5NjN9XSwibWF0ZXJpYWxzIjpbeyJuYW1lIjoiV0FMTF9JTlRFUklPUiIsInBick1ldGFsbGljUm91Z2huZXNzIjp7ImJhc2VDb2xvckZhY3RvciI6WzAuNzg0MzEzNzI1NDkwMTk2MSwwLjc4NDMxMzcyNTQ5MDE5NjEsMC43ODQzMTM3MjU0OTAxOTYxLDEuMF0sIm1ldGFsbGljRmFjdG9yIjowLjAsInJvdWdobmVzc0ZhY3RvciI6MC44fSwiZG91YmxlU2lkZWQiOnRydWV9LHsibmFtZSI6IkRPT1IiLCJwYnJNZXRhbGxpY1JvdWdobmVzcyI6eyJiYXNlQ29sb3JGYWN0b3IiOlswLjU0NTA5ODAzOTIxNTY4NjIsMC40MTE3NjQ3MDU4ODIzNTI5LDAuMDc4NDMxMzcyNTQ5MDE5NiwxLjBdLCJtZXRhbGxpY0ZhY3RvciI6MC4wLCJyb3VnaG5lc3NGYWN0b3IiOjAuOH0sImRvdWJsZVNpZGVkIjp0cnVlfSx7Im5hbWUiOiJXSU5ET1ciLCJwYnJNZXRhbGxpY1JvdWdobmVzcyI6eyJiYXNlQ29sb3JGYWN0b3IiOlswLjUyOTQxMTc2NDcwNTg4MjQsMC44MDc4NDMxMzcyNTQ5MDIsMC45MjE1Njg2Mjc0NTA5ODAzLDEuMF0sIm1ldGFsbGljRmFjdG9yIjowLjAsInJvdWdobmVzc0ZhY3RvciI6MC44fSwiZG91YmxlU2lkZWQiOnRydWV9LHsibmFtZSI6IldBTExfRVhURVJJT1IiLCJwYnJNZXRhbGxpY1JvdWdobmVzcyI6eyJiYXNlQ29sb3JGYWN0b3IiOlswLjYyNzQ1MDk4MDM5MjE1NjksMC42Mjc0NTA5ODAzOTIxNTY5LDAuNjI3NDUwOTgwMzkyMTU2OSwxLjBdLCJtZXRhbGxpY0ZhY3RvciI6MC4wLCJyb3VnaG5lc3NGYWN0b3IiOjAuOH0sImRvdWJsZVNpZGVkIjp0cnVlfSx7Im5hbWUiOiJTTEFCIiwicGJyTWV0YWxsaWNSb3VnaG5lc3MiOnsiYmFzZUNvbG9yRmFjdG9yIjpbMC45MDk4MDM5MjE1Njg2Mjc0LDAuODc4NDMxMzcyNTQ5MDE5NiwwLjgxNTY4NjI3NDUwOTgwMzksMS4wXSwibWV0YWxsaWNGYWN0b3IiOjAuMCwicm91Z2huZXNzRmFjdG9yIjowLjh9LCJkb3VibGVTaWRlZCI6dHJ1ZX1dLCJidWZmZXJzIjpbeyJieXRlTGVuZ3RoIjoyMzI4fV19GAkAAEJJTgAAAKBAAAAAAAAAAAAAAKBAAAAAAAAAAEEAAKBAAABAQAAAAEEAAKBAAABAQAAAAAAAAAAAAQAAAAIAAAAAAAAAAgAAAAMAAAAAAABAAAAAAM3MzL0AAEBAAAAAAM3MzL0AAEBAAAAAAM3MzD0AAABAAAAAAM3MzD0AAABAMzMzQM3MzL0AAEBAMzMzQM3MzL0AAEBAMzMzQM3MzD0AAABAMzMzQM3MzD0AAAAAAQAAAAIAAAAAAAAAAgAAAAMAAAAHAAAABgAAAAUAAAAHAAAABQAAAAQAAAAAAAAABAAAAAUAAAAAAAAABQAAAAEAAAABAAAABQAAAAYAAAABAAAABgAAAAIAAAACAAAABgAAAAcAAAACAAAABwAAAAMAAAADAAAABwAAAAQAAAADAAAABAAAAAAAAAAAAABAZmYGQM3MzL0AAEBAZmYGQM3MzL0AAEBAZmYGQM3MzD0AAABAZmYGQM3MzD0AAABAzcycQM3MzL0AAEBAzcycQM3MzL0AAEBAzcycQM3MzD0AAABAzcycQM3MzD0AAAAAAQAAAAIAAAAAAAAAAgAAAAMAAAAHAAAABgAAAAUAAAAHAAAABQAAAAQAAAAAAAAABAAAAAUAAAAAAAAABQAAAAEAAAABAAAABQAAAAYAAAABAAAABgAAAAIAAAACAAAABgAAAAcAAAACAAAABwAAAAMAAAADAAAABwAAAAQAAAADAAAABAAAAAAAAAAAAKBAAAAAAJqZOUDNzLxAAAAAAJqZOUDNzLxAAAAAAGZmRkAAAKBAAAAAAGZmRkAAAKBAMzMzQJqZOUDNzLxAMzMzQJqZOUDNzLxAMzMzQGZmRkAAAKBAMzMzQGZmRkAAAAAAAQAAAAIAAAAAAAAAAgAAAAMAAAAHAAAABgAAAAUAAAAHAAAABQAAAAQAAAAAAAAABAAAAAUAAAAAAAAABQAAAAEAAAABAAAABQAAAAYAAAABAAAABgAAAAIAAAACAAAABgAAAAcAAAACAAAABwAAAAMAAAADAAAABwAAAAQAAAADAAAABAAAAAAAAAAAAKBAZmYGQJqZOUDNzLxAZmYGQJqZOUDNzLxAZmYGQGZmRkAAAKBAZmYGQGZmRkAAAKBAzcycQJqZOUDNzLxAzcycQJqZOUDNzLxAzcycQGZmRkAAAKBAzcycQGZmRkAAAAAAAQAAAAIAAAAAAAAAAgAAAAMAAAAHAAAABgAAAAUAAAAHAAAABQAAAAQAAAAAAAAABAAAAAUAAAAAAAAABQAAAAEAAAABAAAABQAAAAYAAAABAAAABgAAAAIAAAACAAAABgAAAAcAAAACAAAABwAAAAMAAAADAAAABwAAAAQAAAADAAAABAAAAAAAAAAAAOBAAACAP83MzL0AAAhBAACAP83MzL0AAAhBAACAP83MzD0AAOBAAACAP83MzD0AAOBAMzNzQM3MzL0AAAhBMzNzQM3MzL0AAAhBMzNzQM3MzD0AAOBAMzNzQM3MzD0AAAAAAQAAAAIAAAAAAAAAAgAAAAMAAAAHAAAABgAAAAUAAAAHAAAABQAAAAQAAAAAAAAABAAAAAUAAAAAAAAABQAAAAEAAAABAAAABQAAAAYAAAABAAAABgAAAAIAAAACAAAABgAAAAcAAAACAAAABwAAAAMAAAADAAAABwAAAAQAAAADAAAABAAAAAAAAAAAAOBAzcwMQM3MzL0AAAhBzcwMQM3MzL0AAAhBzcwMQM3MzD0AAOBAzcwMQM3MzD0AAOBAAACgQM3MzL0AAAhBAACgQM3MzL0AAAhBAACgQM3MzD0AAOBAAACgQM3MzD0AAAAAAQAAAAIAAAAAAAAAAgAAAAMAAAAHAAAABgAAAAUAAAAHAAAABQAAAAQAAAAAAAAABAAAAAUAAAAAAAAABQAAAAEAAAABAAAABQAAAAYAAAABAAAABgAAAAIAAAACAAAABgAAAAcAAAACAAAABwAAAAMAAAADAAAABwAAAAQAAAADAAAABAAAAAAAAAAAAIA/AACAP83M/EAAACBAAACAP83M/EAAACBAAACAP5qZAUEAAIA/AACAP5qZAUEAAIA/MzNzQM3M/EAAACBAMzNzQM3M/EAAACBAMzNzQJqZAUEAAIA/MzNzQJqZAUEAAAAAAQAAAAIAAAAAAAAAAgAAAAMAAAAHAAAABgAAAAUAAAAHAAAABQAAAAQAAAAAAAAABAAAAAUAAAAAAAAABQAAAAEAAAABAAAABQAAAAYAAAABAAAABgAAAAIAAAACAAAABgAAAAcAAAACAAAABwAAAAMAAAADAAAABwAAAAQAAAADAAAABAAAAAAAAAAAAIA/zcwMQM3M/EAAACBAzcwMQM3M/EAAACBAzcwMQJqZAUEAAIA/zcwMQJqZAUEAAIA/AACgQM3M/EAAACBAAACgQM3M/EAAACBAAACgQJqZAUEAAIA/AACgQJqZAUEAAAAAAQAAAAIAAAAAAAAAAgAAAAMAAAAHAAAABgAAAAUAAAAHAAAABQAAAAQAAAAAAAAABAAAAAUAAAAAAAAABQAAAAEAAAABAAAABQAAAAYAAAABAAAABgAAAAIAAAACAAAABgAAAAcAAAACAAAABwAAAAMAAAADAAAABwAAAAQAAAADAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAACBBAAAAAAAAAAAAACBBAABAQAAAAAAAAAAAAABAQAAAAAAAACBBAAAAAAAAAEEAACBBAABAQAAAAEEAAAAAAAAAAAAAAEEAAAAAAABAQAAAAEEAAAAAAQAAAAIAAAAAAAAAAgAAAAMAAAABAAAABAAAAAUAAAABAAAABQAAAAIAAAAEAAAABgAAAAcAAAAEAAAABwAAAAUAAAAGAAAAAAAAAAMAAAAGAAAAAwAAAAcAAAAAAAAAAAAAAAAAAAAAACBBAAAAAAAAAAAAACBBAAAAAAAAAEEAAAAAAAAAAAAAAEEAAAAAAABAQAAAAAAAACBBAABAQAAAAAAAACBBAABAQAAAAEEAAAAAAABAQAAAAEEAAAAAAQAAAAIAAAAAAAAAAgAAAAMAAAAEAAAABQAAAAYAAAAEAAAABgAAAAcAAAA=";
+const MODEL_OBJ = "# Kaiken \u2014 Blender-free OBJ export\n# simple_house\nmtllib model.mtl\no WALL_INTERIOR_0\nusemtl WALL_INTERIOR\nv 5.00000 0.00000 0.00000\nv 5.00000 0.00000 8.00000\nv 5.00000 3.00000 8.00000\nv 5.00000 3.00000 0.00000\nf 1 2 3\nf 1 3 4\no DOOR_1\nusemtl DOOR\nv 2.00000 0.00000 -0.10000\nv 3.00000 0.00000 -0.10000\nv 3.00000 0.00000 0.10000\nv 2.00000 0.00000 0.10000\nv 2.00000 2.80000 -0.10000\nv 3.00000 2.80000 -0.10000\nv 3.00000 2.80000 0.10000\nv 2.00000 2.80000 0.10000\nf 5 6 7\nf 5 7 8\nf 12 11 10\nf 12 10 9\nf 5 9 10\nf 5 10 6\nf 6 10 11\nf 6 11 7\nf 7 11 12\nf 7 12 8\nf 8 12 9\nf 8 9 5\no DOOR_2\nusemtl DOOR\nv 2.00000 2.10000 -0.10000\nv 3.00000 2.10000 -0.10000\nv 3.00000 2.10000 0.10000\nv 2.00000 2.10000 0.10000\nv 2.00000 4.90000 -0.10000\nv 3.00000 4.90000 -0.10000\nv 3.00000 4.90000 0.10000\nv 2.00000 4.90000 0.10000\nf 13 14 15\nf 13 15 16\nf 20 19 18\nf 20 18 17\nf 13 17 18\nf 13 18 14\nf 14 18 19\nf 14 19 15\nf 15 19 20\nf 15 20 16\nf 16 20 17\nf 16 17 13\no DOOR_3\nusemtl DOOR\nv 5.00000 0.00000 2.90000\nv 5.90000 0.00000 2.90000\nv 5.90000 0.00000 3.10000\nv 5.00000 0.00000 3.10000\nv 5.00000 2.80000 2.90000\nv 5.90000 2.80000 2.90000\nv 5.90000 2.80000 3.10000\nv 5.00000 2.80000 3.10000\nf 21 22 23\nf 21 23 24\nf 28 27 26\nf 28 26 25\nf 21 25 26\nf 21 26 22\nf 22 26 27\nf 22 27 23\nf 23 27 28\nf 23 28 24\nf 24 28 25\nf 24 25 21\no DOOR_4\nusemtl DOOR\nv 5.00000 2.10000 2.90000\nv 5.90000 2.10000 2.90000\nv 5.90000 2.10000 3.10000\nv 5.00000 2.10000 3.10000\nv 5.00000 4.90000 2.90000\nv 5.90000 4.90000 2.90000\nv 5.90000 4.90000 3.10000\nv 5.00000 4.90000 3.10000\nf 29 30 31\nf 29 31 32\nf 36 35 34\nf 36 34 33\nf 29 33 34\nf 29 34 30\nf 30 34 35\nf 30 35 31\nf 31 35 36\nf 31 36 32\nf 32 36 33\nf 32 33 29\no WINDOW_5\nusemtl WINDOW\nv 7.00000 1.00000 -0.10000\nv 8.50000 1.00000 -0.10000\nv 8.50000 1.00000 0.10000\nv 7.00000 1.00000 0.10000\nv 7.00000 3.80000 -0.10000\nv 8.50000 3.80000 -0.10000\nv 8.50000 3.80000 0.10000\nv 7.00000 3.80000 0.10000\nf 37 38 39\nf 37 39 40\nf 44 43 42\nf 44 42 41\nf 37 41 42\nf 37 42 38\nf 38 42 43\nf 38 43 39\nf 39 43 44\nf 39 44 40\nf 40 44 41\nf 40 41 37\no WINDOW_6\nusemtl WINDOW\nv 7.00000 2.20000 -0.10000\nv 8.50000 2.20000 -0.10000\nv 8.50000 2.20000 0.10000\nv 7.00000 2.20000 0.10000\nv 7.00000 5.00000 -0.10000\nv 8.50000 5.00000 -0.10000\nv 8.50000 5.00000 0.10000\nv 7.00000 5.00000 0.10000\nf 45 46 47\nf 45 47 48\nf 52 51 50\nf 52 50 49\nf 45 49 50\nf 45 50 46\nf 46 50 51\nf 46 51 47\nf 47 51 52\nf 47 52 48\nf 48 52 49\nf 48 49 45\no WINDOW_7\nusemtl WINDOW\nv 1.00000 1.00000 7.90000\nv 2.50000 1.00000 7.90000\nv 2.50000 1.00000 8.10000\nv 1.00000 1.00000 8.10000\nv 1.00000 3.80000 7.90000\nv 2.50000 3.80000 7.90000\nv 2.50000 3.80000 8.10000\nv 1.00000 3.80000 8.10000\nf 53 54 55\nf 53 55 56\nf 60 59 58\nf 60 58 57\nf 53 57 58\nf 53 58 54\nf 54 58 59\nf 54 59 55\nf 55 59 60\nf 55 60 56\nf 56 60 57\nf 56 57 53\no WINDOW_8\nusemtl WINDOW\nv 1.00000 2.20000 7.90000\nv 2.50000 2.20000 7.90000\nv 2.50000 2.20000 8.10000\nv 1.00000 2.20000 8.10000\nv 1.00000 5.00000 7.90000\nv 2.50000 5.00000 7.90000\nv 2.50000 5.00000 8.10000\nv 1.00000 5.00000 8.10000\nf 61 62 63\nf 61 63 64\nf 68 67 66\nf 68 66 65\nf 61 65 66\nf 61 66 62\nf 62 66 67\nf 62 67 63\nf 63 67 68\nf 63 68 64\nf 64 68 65\nf 64 65 61\no WALL_EXTERIOR_9\nusemtl WALL_EXTERIOR\nv 0.00000 0.00000 0.00000\nv 10.00000 0.00000 0.00000\nv 10.00000 3.00000 0.00000\nv 0.00000 3.00000 0.00000\nv 10.00000 0.00000 8.00000\nv 10.00000 3.00000 8.00000\nv 0.00000 0.00000 8.00000\nv 0.00000 3.00000 8.00000\nf 69 70 71\nf 69 71 72\nf 70 73 74\nf 70 74 71\nf 73 75 76\nf 73 76 74\nf 75 69 72\nf 75 72 76\no SLAB_10\nusemtl SLAB\nv 0.00000 0.00000 0.00000\nv 10.00000 0.00000 0.00000\nv 10.00000 0.00000 8.00000\nv 0.00000 0.00000 8.00000\nv 0.00000 3.00000 0.00000\nv 10.00000 3.00000 0.00000\nv 10.00000 3.00000 8.00000\nv 0.00000 3.00000 8.00000\nf 77 78 79\nf 77 79 80\nf 81 82 83\nf 81 83 84\n";
+const MODEL_CSV = "category,name,metric,value\nelement,DOOR,count,4\nelement,SLAB,count,1\nelement,WALL_EXTERIOR,count,1\nelement,WALL_INTERIOR,count,1\nelement,WINDOW,count,4\nsummary,elements,count,11\nsummary,rooms,count,0\nsummary,floors,count,3\n";
+const MODEL_NAME = "simple_house";
+
+function _sanitizeName() {
+    return (MODEL_NAME || 'model').replace(/[^a-z0-9_-]+/gi, '_');
+}
+function _downloadBlob(blob, filename) {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = filename;
+    document.body.appendChild(a); a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+function downloadGLB() {
+    const bin = atob(MODEL_GLB_B64);
+    const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    _downloadBlob(new Blob([bytes], { type: 'model/gltf-binary' }), _sanitizeName() + '.glb');
+}
+function downloadOBJ() {
+    _downloadBlob(new Blob([MODEL_OBJ], { type: 'text/plain' }), _sanitizeName() + '.obj');
+}
+function downloadCSV() {
+    _downloadBlob(new Blob([MODEL_CSV], { type: 'text/csv' }), _sanitizeName() + '_quantities.csv');
+}
+function captureScreenshot() {
+    renderer.render(scene, camera);  // ensure current frame is in the buffer
+    renderer.domElement.toBlob((blob) => {
+        if (blob) _downloadBlob(blob, _sanitizeName() + '.png');
+    });
+}
+
+// ================================================================
+// Scene setup
+// ================================================================
+let scene, camera, renderer, controls;
+let elementMeshes = [];  // { mesh, data }
+let roomMeshes = [];
+let groundPlane;
+let raycaster, mouse;
+let currentFloor = -1;  // -1 = all
+let xrayMode = false;
+
+function init() {
+    scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x1a1a2e);
+    scene.fog = new THREE.Fog(0x1a1a2e, SIZE * 3, SIZE * 8);
+
+    // Camera
+    camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.01, SIZE * 20);
+    camera.position.set(CENTER.x + SIZE * 0.8, CENTER.y + SIZE * 0.6, CENTER.z + SIZE * 0.8);
+    camera.lookAt(CENTER.x, CENTER.y, CENTER.z);
+
+    // Renderer
+    renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.2;
+    document.getElementById('canvas-container').appendChild(renderer.domElement);
+
+    // Controls
+    controls = new THREE.OrbitControls(camera, renderer.domElement);
+    controls.target.set(CENTER.x, CENTER.y, CENTER.z);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.08;
+    controls.minDistance = SIZE * 0.1;
+    controls.maxDistance = SIZE * 5;
+    controls.update();
+
+    // Lights
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+    scene.add(ambientLight);
+
+    const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+    dirLight.position.set(SIZE * 1.5, SIZE * 2, SIZE * 1.5);
+    dirLight.castShadow = true;
+    dirLight.shadow.mapSize.width = 2048;
+    dirLight.shadow.mapSize.height = 2048;
+    dirLight.shadow.camera.near = 0.1;
+    dirLight.shadow.camera.far = SIZE * 6;
+    const shadowSize = SIZE * 2;
+    dirLight.shadow.camera.left = -shadowSize;
+    dirLight.shadow.camera.right = shadowSize;
+    dirLight.shadow.camera.top = shadowSize;
+    dirLight.shadow.camera.bottom = -shadowSize;
+    scene.add(dirLight);
+
+    const fillLight = new THREE.DirectionalLight(0x9bb7ff, 0.3);
+    fillLight.position.set(-SIZE, SIZE * 0.5, -SIZE);
+    scene.add(fillLight);
+
+    const hemiLight = new THREE.HemisphereLight(0xaaddff, 0x444422, 0.4);
+    scene.add(hemiLight);
+
+    // Ground plane
+    const groundGeo = new THREE.PlaneGeometry(SIZE * 6, SIZE * 6);
+    const groundMat = new THREE.MeshStandardMaterial({
+        color: 0x2a2a3e, roughness: 0.9, metalness: 0.1
+    });
+    groundPlane = new THREE.Mesh(groundGeo, groundMat);
+    groundPlane.rotation.x = -Math.PI / 2;
+    groundPlane.position.set(CENTER.x, -0.01, CENTER.z);
+    groundPlane.receiveShadow = true;
+    scene.add(groundPlane);
+
+    // Grid
+    const gridHelper = new THREE.GridHelper(SIZE * 4, Math.ceil(SIZE * 4), 0x444466, 0x333355);
+    gridHelper.position.set(CENTER.x, 0, CENTER.z);
+    scene.add(gridHelper);
+
+    // Axes (small)
+    const axesHelper = new THREE.AxesHelper(SIZE * 0.3);
+    axesHelper.position.set(CENTER.x - SIZE * 0.6, 0, CENTER.z - SIZE * 0.6);
+    scene.add(axesHelper);
+
+    // Raycaster for picking
+    raycaster = new THREE.Raycaster();
+    mouse = new THREE.Vector2();
+
+    // Build geometry
+    buildElements();
+    buildRooms();
+
+    // Events
+    window.addEventListener('resize', onResize);
+    renderer.domElement.addEventListener('click', onMouseClick);
+    renderer.domElement.addEventListener('mousemove', onMouseMove);
+
+    // Hide loading
+    document.getElementById('loading').style.display = 'none';
+
+    animate();
+}
+
+function buildElements() {
+    ELEMENTS.forEach(e => {
+        let mesh = null;
+        const color = new THREE.Color(e.color);
+        const mat = new THREE.MeshStandardMaterial({
+            color: color,
+            roughness: 0.7,
+            metalness: 0.1,
+            transparent: false,
+            side: THREE.DoubleSide,
+        });
+
+        if (e.geometry === 'wall_segments') {
+            const group = new THREE.Group();
+            e.segments.forEach(seg => {
+                const geo = new THREE.BoxGeometry(seg.length, e.height, e.thickness);
+                const wallMesh = new THREE.Mesh(geo, mat);
+                wallMesh.position.set(seg.cx, e.base_z + e.height / 2, seg.cy);
+                wallMesh.rotation.y = -seg.angle;
+                wallMesh.castShadow = true;
+                wallMesh.receiveShadow = true;
+                group.add(wallMesh);
+            });
+            mesh = group;
+            scene.add(group);
+        }
+        else if (e.geometry === 'extrude_polygon') {
+            const shape = new THREE.Shape();
+            if (e.points.length > 0) {
+                shape.moveTo(e.points[0][0], e.points[0][1]);
+                for (let i = 1; i < e.points.length; i++) {
+                    shape.lineTo(e.points[i][0], e.points[i][1]);
+                }
+                shape.lineTo(e.points[0][0], e.points[0][1]);
+            }
+            const extrudeSettings = { depth: e.height, bevelEnabled: false };
+            const geo = new THREE.ExtrudeGeometry(shape, extrudeSettings);
+            // Rotate to XZ plane (Three.js extrudes along Z, we want Y up)
+            geo.rotateX(-Math.PI / 2);
+            mesh = new THREE.Mesh(geo, mat);
+            mesh.position.y = e.base_z;
+            mesh.castShadow = true;
+            mesh.receiveShadow = true;
+            scene.add(mesh);
+        }
+        else if (e.geometry === 'mesh') {
+            const geo = new THREE.BufferGeometry();
+            const vertices = [];
+            const indices = [];
+            e.vertices.forEach(v => vertices.push(v[0], v[1], v[2]));
+            e.faces.forEach(f => {
+                if (f.length === 3) {
+                    indices.push(f[0], f[1], f[2]);
+                } else if (f.length === 4) {
+                    indices.push(f[0], f[1], f[2], f[0], f[2], f[3]);
+                }
+            });
+            geo.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
+            if (indices.length > 0) {
+                geo.setIndex(indices);
+            }
+            geo.computeVertexNormals();
+            mesh = new THREE.Mesh(geo, mat);
+            mesh.castShadow = true;
+            mesh.receiveShadow = true;
+            scene.add(mesh);
+        }
+
+        if (mesh) {
+            elementMeshes.push({ mesh, data: e, material: mat });
+        }
+    });
+}
+
+function buildRooms() {
+    ROOMS.forEach(r => {
+        if (r.points.length < 3) return;
+        const shape = new THREE.Shape();
+        shape.moveTo(r.points[0][0], r.points[0][1]);
+        for (let i = 1; i < r.points.length; i++) {
+            shape.lineTo(r.points[i][0], r.points[i][1]);
+        }
+        shape.lineTo(r.points[0][0], r.points[0][1]);
+
+        const geo = new THREE.ShapeGeometry(shape);
+        geo.rotateX(-Math.PI / 2);
+        const mat = new THREE.MeshStandardMaterial({
+            color: 0x4a9eff,
+            transparent: true,
+            opacity: 0.15,
+            side: THREE.DoubleSide,
+        });
+        const mesh = new THREE.Mesh(geo, mat);
+        mesh.position.y = r.base_z;
+        scene.add(mesh);
+        roomMeshes.push({ mesh, data: r });
+    });
+}
+
+// ================================================================
+// Interaction
+// ================================================================
+function toggleSidebar() {
+    const sb = document.getElementById('sidebar');
+    const btn = document.getElementById('sidebarToggle');
+    sb.classList.toggle('collapsed');
+    btn.classList.toggle('open');
+}
+
+function showFloor(floorIndex, btn) {
+    currentFloor = floorIndex;
+    document.querySelectorAll('.floor-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    updateVisibility();
+}
+
+function showAllFloors(btn) {
+    currentFloor = -1;
+    document.querySelectorAll('.floor-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    updateVisibility();
+}
+
+let hiddenTypes = new Set();
+
+function toggleLayerGroup(types, visible) {
+    types.forEach(t => {
+        if (visible) hiddenTypes.delete(t);
+        else hiddenTypes.add(t);
+    });
+    updateVisibility();
+}
+
+function updateVisibility() {
+    elementMeshes.forEach(({ mesh, data }) => {
+        let visible = true;
+        if (currentFloor >= 0 && data.floor !== currentFloor) visible = false;
+        if (hiddenTypes.has(data.type)) visible = false;
+        mesh.visible = visible;
+    });
+    roomMeshes.forEach(({ mesh, data }) => {
+        let visible = true;
+        if (currentFloor >= 0 && data.floor !== currentFloor) visible = false;
+        mesh.visible = visible;
+    });
+}
+
+function setViewMode(mode, btn) {
+    document.querySelectorAll('.view-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+
+    const dist = SIZE * 1.5;
+    switch (mode) {
+        case '3d':
+            camera.position.set(CENTER.x + dist * 0.7, CENTER.y + dist * 0.5, CENTER.z + dist * 0.7);
+            setXray(false);
+            break;
+        case 'top':
+            camera.position.set(CENTER.x, CENTER.y + dist * 1.5, CENTER.z + 0.01);
+            setXray(false);
+            break;
+        case 'front':
+            camera.position.set(CENTER.x, CENTER.y + dist * 0.3, CENTER.z + dist * 1.5);
+            setXray(false);
+            break;
+        case 'side':
+            camera.position.set(CENTER.x + dist * 1.5, CENTER.y + dist * 0.3, CENTER.z);
+            setXray(false);
+            break;
+        case 'xray':
+            setXray(true);
+            break;
+    }
+    controls.target.set(CENTER.x, CENTER.y, CENTER.z);
+    controls.update();
+}
+
+function setXray(enabled) {
+    xrayMode = enabled;
+    elementMeshes.forEach(({ mesh, material }) => {
+        material.transparent = enabled;
+        material.opacity = enabled ? 0.35 : 1.0;
+        material.wireframe = false;
+        material.needsUpdate = true;
+    });
+}
+
+let hoveredMesh = null;
+
+function onMouseMove(event) {
+    const rect = renderer.domElement.getBoundingClientRect();
+    mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+    mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+
+    raycaster.setFromCamera(mouse, camera);
+    const meshList = elementMeshes.flatMap(e => {
+        if (e.mesh.isGroup) return e.mesh.children;
+        return [e.mesh];
+    }).filter(m => m.visible);
+
+    const intersects = raycaster.intersectObjects(meshList);
+    renderer.domElement.style.cursor = intersects.length > 0 ? 'pointer' : 'default';
+}
+
+function onMouseClick(event) {
+    raycaster.setFromCamera(mouse, camera);
+    const meshList = [];
+    const meshToData = new Map();
+    elementMeshes.forEach(e => {
+        if (e.mesh.isGroup) {
+            e.mesh.children.forEach(c => {
+                if (c.visible) { meshList.push(c); meshToData.set(c, e); }
+            });
+        } else if (e.mesh.visible) {
+            meshList.push(e.mesh); meshToData.set(e.mesh, e);
+        }
+    });
+
+    const intersects = raycaster.intersectObjects(meshList);
+    const panel = document.getElementById('info-panel');
+
+    if (intersects.length > 0) {
+        const hit = intersects[0].object;
+        const eData = meshToData.get(hit);
+        if (eData) {
+            document.getElementById('info-title').textContent = eData.data.type;
+            document.getElementById('info-content').innerHTML = `
+                <div class="info-row"><span class="info-label">ID:</span> ${eData.data.id}</div>
+                <div class="info-row"><span class="info-label">Type:</span> ${eData.data.type}</div>
+                <div class="info-row"><span class="info-label">Floor:</span> ${eData.data.floor}</div>
+                <div class="info-row"><span class="info-label">Base Z:</span> ${(eData.data.base_z || 0).toFixed(2)}m</div>
+                ${eData.data.height ? `<div class="info-row"><span class="info-label">Height:</span> ${eData.data.height.toFixed(2)}m</div>` : ''}
+                ${eData.data.thickness ? `<div class="info-row"><span class="info-label">Thickness:</span> ${eData.data.thickness.toFixed(3)}m</div>` : ''}
+            `;
+            panel.style.display = 'block';
+
+            // Highlight
+            if (hoveredMesh) {
+                hoveredMesh.material.emissive.setHex(0x000000);
+            }
+            if (hit.material) {
+                hit.material.emissive.setHex(0x333355);
+                hoveredMesh = hit;
+            }
+        }
+    } else {
+        panel.style.display = 'none';
+        if (hoveredMesh) {
+            hoveredMesh.material.emissive.setHex(0x000000);
+            hoveredMesh = null;
+        }
+    }
+}
+
+function onResize() {
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+}
+
+function animate() {
+    requestAnimationFrame(animate);
+    controls.update();
+    renderer.render(scene, camera);
+}
+
+// ================================================================
+// Initialize
+// ================================================================
+init();
+</script>
+</body>
+</html>
