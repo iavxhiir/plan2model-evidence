@@ -1,0 +1,15 @@
+
+Project: commercial_building
+Source:  commercial_building.dxf  (synthetic example from the prototype repository)
+Floors:  12
+Elements: 185  (from 937 CAD entities)
+Rooms:   0
+Parse time: 0.10s
+
+Element types:
+  column: 1
+  slab: 1
+  unknown: 1
+  wall: 1
+  wall_interior: 1
+  window: 180
